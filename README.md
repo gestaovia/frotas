@@ -1,4 +1,4 @@
-# Vialink Frota
+# gestaovia
 
 Gestão visual de frota: posse do veículo por QR Code, checklists com fotos, mapa da frota, calendário de manutenção, CRLV/IPVA, pedágios, multas, premiação de condutores e rastreamento (Traccar).
 
@@ -75,3 +75,10 @@ Para aplicar as migrations em outro projeto: `supabase link --project-ref <ref>`
 ## Publicação na Hostinger
 
 Envie `dist/index.html` para a pasta `public_html` (ou subpasta). Ative HTTPS no domínio. Depois ajuste a *Site URL* do Supabase para o endereço final.
+
+## Visual
+
+- Tema neutro (bege e grafite) com **modo claro e escuro**: botão sol/lua no topo; a escolha fica salva no aparelho e, sem escolha, segue o sistema.
+- Cor só onde ajuda a decidir: **verde** para confirmar/salvar, **vermelho** para excluir/inativar e escalas de urgência apenas no **calendário** e nos itens que pedem intervenção imediata (lista de atenção, vencimentos, plano de manutenção).
+- Bordas pouco arredondadas (4–6 px). Fontes: Inter, JetBrains Mono (placas) e Playfair Display (marca).
+- Responsivo de 320 px em diante: campos sem zoom no iPhone, janelas em tela cheia no celular, alvos de toque maiores e áreas seguras (notch).

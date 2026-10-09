@@ -23,10 +23,11 @@ lcss = re.sub(r'\n\s*\n', '\n', lcss)
 bm = (SRC / 'basemap.json').read_text(encoding='utf-8')
 js = '\n'.join((SRC / f).read_text(encoding='utf-8') for f in ORDER)
 
-head = '''<title>Vialink Frota</title>
+head = '''<title>gestaovia</title>
 <meta name="description" content="Gestão visual de frota: posse por QR Code, checklists, mapa, calendário de manutenção e premiação.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:wght@700&display=swap">
+<script>try{var t=localStorage.getItem('vialink-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -40,7 +41,7 @@ out = ROOT / 'dist'
 out.mkdir(exist_ok=True)
 (out / 'index.html').write_text('<!doctype html>\n<html lang="pt-BR">\n<head>\n<meta charset="utf-8">\n'
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-    '<meta name="theme-color" content="#2563EB">\n' + head + '</head>\n<body>\n' + body + '</body>\n</html>\n', encoding='utf-8')
+    '<meta name="theme-color" content="#F4EFE4">\n<meta name="color-scheme" content="light dark">\n' + head + '</head>\n<body>\n' + body + '</body>\n</html>\n', encoding='utf-8')
 # versão de demonstração (sem servidor) para visualizar no Claude
 demo_body = body.replace(f'window.VIALINK_CONFIG={json.dumps(public)};', 'window.VIALINK_CONFIG={};')
 (out / 'demo.html').write_text(head + demo_body, encoding='utf-8')

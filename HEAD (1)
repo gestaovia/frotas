@@ -1,0 +1,2 @@
+0000000000000000000000000000000000000000 6b05d61606ad053c2d616ef00e8d686158da5c90 Vialink <noreply@anthropic.com> 1790470128 -0300	commit (initial): Vialink Frota: app + Supabase (login, RLS por perfil, storage privado, funções do servidor)
+6b05d61606ad053c2d616ef00e8d686158da5c90 d065fd2762c89a826618b8179d15e5090dedf7b2 Mauricio <mauriciostos123@gmail.com> 1791511789 +0000	commit: gestaovia: novo nome e visual neutro (claro/escuro), botões confirmar/excluir, urgência só no calendário e alertas, ajustes para celular

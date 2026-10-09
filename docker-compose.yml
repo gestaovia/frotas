@@ -1,0 +1,51 @@
+# Traccar + PostgreSQL (TimescaleDB) para o gestaovia
+# Rode em um VPS Linux com Docker (ex.: Hostinger VPS). A hospedagem compartilhada não roda Traccar.
+#   cp .env.example .env   (preencha as senhas; o arquivo .env NÃO vai para o GitHub)
+#   docker compose up -d
+# Painel do Traccar: coloque um proxy HTTPS (Caddy/Nginx) na frente da porta 8082.
+services:
+  database:
+    image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: traccar
+      POSTGRES_USER: traccar
+      POSTGRES_PASSWORD: ${TRACCAR_DB_PASSWORD}
+      TIMESCALEDB_TELEMETRY: "off"
+    volumes:
+      - /opt/traccar/data:/var/lib/postgresql/data
+
+  traccar:
+    image: traccar/traccar:latest
+    restart: unless-stopped
+    depends_on:
+      - database
+    environment:
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      DATABASE_DRIVER: org.postgresql.Driver
+      DATABASE_URL: jdbc:postgresql://database:5432/traccar
+      DATABASE_USER: traccar
+      DATABASE_PASSWORD: ${TRACCAR_DB_PASSWORD}
+      # Cada posição e cada alerta vão para o banco do gestaovia (função traccar-webhook do Supabase).
+      # O segredo aparece para o administrador do gestaovia em Configurações › Rastreamento.
+      FORWARD_ENABLE: "true"
+      FORWARD_TYPE: json
+      FORWARD_URL: "https://mdqovkgvxlykcemdrpbf.supabase.co/functions/v1/traccar-webhook"
+      FORWARD_HEADER: "Authorization: Bearer ${VIALINK_WEBHOOK_SECRET}"
+      FORWARD_RETRY_ENABLE: "true"
+      EVENT_FORWARD_ENABLE: "true"
+      EVENT_FORWARD_TYPE: json
+      EVENT_FORWARD_URL: "https://mdqovkgvxlykcemdrpbf.supabase.co/functions/v1/traccar-webhook"
+      EVENT_FORWARD_HEADER: "Authorization: Bearer ${VIALINK_WEBHOOK_SECRET}"
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8082/api/health" ]
+      interval: 2m
+      timeout: 5s
+      start_period: 1h
+      retries: 3
+    ports:
+      - "8082:8082"            # painel e API (publicar só atrás de HTTPS)
+      - "5000-5500:5000-5500"  # portas dos rastreadores (cada protocolo usa uma porta)
+      - "5000-5500:5000-5500/udp"
+    volumes:
+      - /opt/traccar/logs:/opt/traccar/logs

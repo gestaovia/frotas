@@ -1,0 +1,38 @@
+GESTAOVIA · INTEGRAÇÃO COM O TRACCAR
+
+Como funciona (versão com Supabase)
+- O navegador NUNCA fala direto com o Traccar e nunca recebe o token.
+- Ao vivo: o painel pede as posições à função traccar-proxy (servidor do Supabase), que
+  consulta o Traccar com o token guardado no banco, numa área que a API não expõe.
+- Histórico: o Traccar encaminha cada posição e cada alerta para a função traccar-webhook,
+  que grava em vehicle_positions, vehicle_last_location e tracker_events e descobre o
+  condutor que estava com a posse no horário (função custody_at). Funciona com o gestaovia fechado.
+- Excesso de velocidade, frenagem e aceleração bruscas viram alertas no painel e descontam
+  na premiação do condutor responsável pela posse naquele horário.
+
+Passo a passo
+1. SERVIDOR. O Traccar é um programa Java e não roda na hospedagem compartilhada da Hostinger.
+   Use um VPS (ex.: Hostinger VPS) com Docker. Nesta pasta:
+       cp .env.example .env      (preencha a senha do banco; o segredo vem do passo 5)
+       docker compose up -d
+2. HTTPS. Aponte um subdomínio (ex.: rastreio.suaempresa.com.br) para o VPS e coloque um
+   proxy HTTPS (Nginx/Caddy) na porta 8082.
+3. RASTREADORES. No painel do Traccar, cadastre cada dispositivo com:
+     Nome = placa do veículo (ex.: ABC1D23) → o gestaovia vincula sozinho
+     Identificador = IMEI do rastreador
+   Piloto sem rastreador: app gratuito "Traccar Client" no celular que fica no carro.
+4. LIMITE DE VELOCIDADE. No Traccar, em Configurações › Servidor (ou no dispositivo) ›
+   Atributos, adicione "Limite de velocidade". Sem isso não há alerta de excesso.
+5. GESTAOVIA. Entre como administrador › Configurações › Rastreamento (Traccar):
+     - escolha "Servidor Traccar", informe o endereço https e o token
+       (Traccar › Configurações › Preferências › Token; use um usuário só de leitura)
+     - clique em "Testar conexão" e depois em "Salvar e conectar"
+     - copie o bloco "Encaminhamento de posições" (contém o segredo do webhook) para o
+       traccar.xml, ou coloque o segredo em VIALINK_WEBHOOK_SECRET no .env, e reinicie o Traccar.
+
+Segurança
+- Token do Traccar: fica só no banco (schema privado), lido apenas pelas funções do servidor.
+- Segredo do webhook: só o administrador vê. Se vazar, gere outro no SQL Editor:
+    update private.traccar_config set webhook_secret = encode(extensions.gen_random_bytes(24),'hex');
+  e atualize o .env do Traccar.
+- Nunca use o token do administrador do Traccar no gestaovia.
