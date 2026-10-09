@@ -524,3 +524,15 @@ img,video,canvas{max-width:100%}
 .leaflet-control-attribution a{color:var(--text2)!important}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--surface)!important;color:var(--text)!important;border-radius:var(--r)!important}
 @media (max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ===== Cor com propósito (09/10/2026) =====
+   Pontuação: verde, amarelo, laranja, vermelho nos minigráficos (anel, barras e número).
+   Escanear veículo: verde, a ação principal do condutor. O resto continua neutro. */
+.bar.s-ok i{background:var(--u-green)} .bar.s-warn i{background:var(--u-yellow)} .bar.s-urg i{background:var(--u-orange)} .bar.s-bad i{background:var(--u-red)}
+.kpi.s-ok .v{color:var(--u-green)} .kpi.s-warn .v{color:var(--u-yellow)} .kpi.s-urg .v{color:var(--u-orange)} .kpi.s-bad .v{color:var(--u-red)}
+.tile.scan{background:var(--confirm);border-color:var(--confirm);color:var(--confirm-fg)}
+.tile.scan .ti{background:color-mix(in srgb,var(--confirm-fg) 18%,transparent);color:var(--confirm-fg)}
+.tile.scan small{color:color-mix(in srgb,var(--confirm-fg) 85%,transparent)}
+.tile.scan:hover{border-color:var(--confirm);filter:brightness(.94)}
+.icon-btn.scan{color:var(--confirm);border-color:color-mix(in srgb,var(--confirm) 45%,var(--border))}
+.icon-btn.scan:hover{color:var(--confirm);border-color:var(--confirm)}

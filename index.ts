@@ -1,130 +1,93 @@
-// gestaovia · admin-users
-// Cria, altera, ativa/inativa usuários e redefine senha.
-// A chave de serviço (SUPABASE_SERVICE_ROLE_KEY) existe só aqui, no servidor.
-//   admin  : gerencia qualquer usuário
-//   gestor : gerencia somente condutores
+// gestaovia · traccar-webhook
+// Recebe posições (forward.type=json) e alertas (event.forward) do Traccar.
+// Autenticação: cabeçalho "Authorization: Bearer <segredo do webhook>".
+// O segredo é gerado no banco e aparece para o administrador em
+// Configurações › Rastreamento. Publicada sem verificação de JWT (o Traccar
+// não tem login do Supabase), por isso o segredo é conferido aqui.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const SB_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const ROLES = ["admin", "gestor", "supervisor", "condutor"];
+const KNOT = 1.852;
+const ALARMS = new Set(["overspeed", "hardBraking", "hardAcceleration", "hardCornering", "sos", "powerCut", "tampering"]);
+const LABEL: Record<string, string> = { overspeed: "Excesso de velocidade", sos: "Botão de pânico", powerCut: "Rastreador desligado da bateria", tampering: "Violação do rastreador" };
+const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
-const cors = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-const fail = (msg: string, status = 400) => json({ error: msg }, status);
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let secret: { value: string; at: number } | null = null;
+async function webhookSecret() {
+  if (secret && Date.now() - secret.at < 60000) return secret.value;
+  const { data } = await db.rpc("traccar_config_internal");
+  secret = { value: data?.[0]?.webhook_secret ?? "", at: Date.now() };
+  return secret.value;
+}
+function sameText(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return fail("Método não permitido.", 405);
+  if (req.method !== "POST") return new Response("método não permitido", { status: 405 });
+  const expected = await webhookSecret();
+  const got = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!expected || !sameText(got, expected)) return new Response("não autorizado", { status: 401 });
 
-  // quem está chamando (token do login, validado pelo Supabase Auth)
-  const auth = req.headers.get("Authorization") ?? "";
-  const asUser = createClient(SB_URL, ANON_KEY, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
-  const { data: { user } } = await asUser.auth.getUser();
-  if (!user) return fail("Sessão expirada. Entre novamente.", 401);
+  let body: any;
+  try { body = await req.json(); } catch { return new Response("json inválido", { status: 400 }); }
+  const device = body.device ?? {};
+  const pos = body.position ?? null;
 
-  const db = createClient(SB_URL, SERVICE_KEY, { auth: { persistSession: false } });
-  const { data: me } = await db.from("profiles").select("id, role, active").eq("id", user.id).maybeSingle();
-  if (!me?.active || !["admin", "gestor"].includes(me.role)) return fail("Sem permissão para gerenciar usuários.", 403);
-  const isAdmin = me.role === "admin";
+  // veículo vinculado pelo id do dispositivo ou pelo IMEI (uniqueId)
+  let vehicle: any = null;
+  if (Number.isFinite(Number(device.id))) {
+    ({ data: vehicle } = await db.from("vehicles").select("id, plate, odometer").eq("traccar_id", Number(device.id)).maybeSingle());
+  }
+  if (!vehicle && device.uniqueId) {
+    ({ data: vehicle } = await db.from("vehicles").select("id, plate, odometer").eq("traccar_unique_id", String(device.uniqueId)).maybeSingle());
+  }
+  if (!vehicle) return new Response("dispositivo sem veículo vinculado", { status: 202 });
 
-  let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return fail("Requisição inválida."); }
-  const action = String(body.action ?? "");
-
-  if (action === "create") {
-    const email = String(body.email ?? "").trim().toLowerCase();
-    const name = String(body.name ?? "").trim();
-    const role = String(body.role ?? "condutor");
-    const password = String(body.password ?? "");
-    const driverId = body.driverId ? String(body.driverId) : null;
-    if (!EMAIL.test(email)) return fail("Informe um e-mail válido.");
-    if (name.length < 3) return fail("Informe o nome.");
-    if (!ROLES.includes(role)) return fail("Perfil inválido.");
-    if (!isAdmin && role !== "condutor") return fail("O gestor cadastra apenas condutores.", 403);
-    if (password.length < 8) return fail("A senha inicial precisa ter ao menos 8 caracteres.");
-    if (driverId) {
-      if (!UUID.test(driverId)) return fail("Condutor inválido.");
-      const { data: d } = await db.from("drivers").select("id").eq("id", driverId).maybeSingle();
-      if (!d) return fail("Cadastro do condutor não encontrado.");
+  // ---- alerta (event.forward) ----
+  if (body.event) {
+    const e = body.event;
+    const type = e.type === "alarm" ? e.attributes?.alarm : e.type === "deviceOverspeed" ? "overspeed" : e.type;
+    if (!ALARMS.has(type)) return new Response("ignorado", { status: 202 });
+    const at = e.eventTime ?? new Date().toISOString();
+    const { data: who } = await db.rpc("custody_at", { p_vehicle: vehicle.id, p_at: at });
+    const driverId = who?.[0]?.driver_id ?? null;
+    const speed = pos ? Math.round((pos.speed ?? 0) * KNOT) : null;
+    const { error } = await db.from("tracker_events").upsert({
+      ext_id: e.id ?? null, vehicle_id: vehicle.id, driver_id: driverId, type, at,
+      speed, lat: pos?.latitude ?? null, lng: pos?.longitude ?? null,
+    }, { onConflict: "ext_id", ignoreDuplicates: true });
+    if (!error && LABEL[type]) {
+      await db.from("notifications").insert({
+        to_target: "gestao", level: type === "overspeed" ? "warn" : "bad",
+        text: `${vehicle.plate}: ${LABEL[type]}${speed ? ` a ${speed} km/h` : ""}.`,
+        link: { page: "veiculo", id: vehicle.id },
+      });
     }
-    const { data: created, error } = await db.auth.admin.createUser({
-      email, password, email_confirm: true,
-      user_metadata: { name },
-      app_metadata: { vialink_role: role, vialink_name: name, vialink_driver_id: driverId, vialink_must_change: true },
-    });
-    if (error || !created.user) {
-      const dup = /already|registered|exists/i.test(error?.message ?? "");
-      return fail(dup ? "Este e-mail já tem acesso ao sistema." : `Não foi possível criar o acesso: ${error?.message}`);
-    }
-    const profile = { id: created.user.id, email, name, role, driver_id: driverId, active: true, must_change_password: true };
-    const { error: pErr } = await db.from("profiles").upsert(profile);
-    if (pErr) return fail(`Acesso criado, mas o perfil falhou: ${pErr.message}`, 500);
-    return json({ profile });
+    await db.from("audit_logs").insert({ type: "telemetria", text: `${LABEL[type] ?? type}${speed ? ` (${speed} km/h)` : ""} registrado pelo rastreador`, vehicle_id: vehicle.id, driver_id: driverId, user_id: "sistema", at });
+    return new Response("ok");
   }
 
-  if (action === "update" || action === "reset_password") {
-    const id = String(body.id ?? "");
-    if (!UUID.test(id)) return fail("Usuário inválido.");
-    const { data: target } = await db.from("profiles").select("*").eq("id", id).maybeSingle();
-    if (!target) return fail("Usuário não encontrado.", 404);
-    if (!isAdmin && target.role !== "condutor") return fail("O gestor gerencia apenas condutores.", 403);
-
-    if (action === "reset_password") {
-      const password = String(body.password ?? "");
-      if (password.length < 8) return fail("A senha precisa ter ao menos 8 caracteres.");
-      const { error } = await db.auth.admin.updateUserById(id, { password });
-      if (error) return fail(error.message);
-      await db.from("profiles").update({ must_change_password: true }).eq("id", id);
-      return json({ ok: true });
-    }
-
-    const patch: Record<string, unknown> = {};
-    if (body.name !== undefined) { const n = String(body.name).trim(); if (n.length < 3) return fail("Informe o nome."); patch.name = n; }
-    if (body.role !== undefined) {
-      const r = String(body.role);
-      if (!ROLES.includes(r)) return fail("Perfil inválido.");
-      if (!isAdmin && r !== "condutor") return fail("O gestor não altera perfis de acesso.", 403);
-      patch.role = r;
-    }
-    if (body.driverId !== undefined) {
-      const d = body.driverId ? String(body.driverId) : null;
-      if (d && !UUID.test(d)) return fail("Condutor inválido.");
-      patch.driver_id = d;
-    }
-    if (body.active !== undefined) patch.active = !!body.active;
-    if (body.email !== undefined) {
-      const e = String(body.email).trim().toLowerCase();
-      if (!EMAIL.test(e)) return fail("Informe um e-mail válido.");
-      if (e !== target.email) {
-        const { error } = await db.auth.admin.updateUserById(id, { email: e, email_confirm: true });
-        if (error) return fail(/already|registered|exists/i.test(error.message) ? "Este e-mail já tem acesso ao sistema." : error.message);
-        patch.email = e;
-      }
-    }
-    // proteções: ninguém se desativa ou se rebaixa, e sempre sobra um administrador ativo
-    if (id === me.id && (patch.active === false || (patch.role && patch.role !== me.role))) return fail("Você não pode desativar ou trocar o próprio perfil.");
-    if (target.role === "admin" && (patch.active === false || (patch.role && patch.role !== "admin"))) {
-      const { count } = await db.from("profiles").select("id", { count: "exact", head: true }).eq("role", "admin").eq("active", true);
-      if ((count ?? 0) <= 1) return fail("É preciso manter ao menos um administrador ativo.");
-    }
-    if (patch.active !== undefined && patch.active !== target.active) {
-      // inativo: bloqueia novos logins e a renovação da sessão
-      const { error } = await db.auth.admin.updateUserById(id, { ban_duration: patch.active ? "none" : "876000h" });
-      if (error) return fail(error.message);
-    }
-    const { data: updated, error } = await db.from("profiles").update(patch).eq("id", id).select().single();
-    if (error) return fail(error.message);
-    return json({ profile: updated });
+  // ---- posição (forward) ----
+  if (!pos || pos.valid === false) return new Response("sem posição válida", { status: 202 });
+  const a = pos.attributes ?? {};
+  const odo = a.odometer ? a.odometer / 1000 : a.totalDistance ? a.totalDistance / 1000 : null;
+  const at = pos.fixTime ?? pos.deviceTime ?? new Date().toISOString();
+  const speed = Math.round((pos.speed ?? 0) * KNOT);
+  await db.from("vehicle_positions").upsert({
+    traccar_position_id: pos.id ?? null, vehicle_id: vehicle.id, lat: pos.latitude, lng: pos.longitude,
+    speed, course: pos.course ?? null, ignition: a.ignition ?? null, km: odo ? Math.round(odo) : null,
+    address: pos.address ?? null, at,
+  }, { onConflict: "traccar_position_id", ignoreDuplicates: true });
+  await db.from("vehicle_last_location").upsert({
+    id: vehicle.id, lat: pos.latitude, lng: pos.longitude, speed, ignition: a.ignition ?? speed > 1,
+    km: odo ? Math.round(odo) : vehicle.odometer, at, source: "traccar",
+    extra: { course: pos.course ?? null, address: pos.address ?? "", positionId: pos.id ?? null, motion: a.motion ?? null },
+  });
+  // hodômetro só avança (ignora saltos acima de 5.000 km, típicos de troca de rastreador)
+  if (odo && odo > Number(vehicle.odometer) && odo - Number(vehicle.odometer) < 5000) {
+    await db.from("vehicles").update({ odometer: Math.round(odo) }).eq("id", vehicle.id);
   }
-
-  return fail("Ação desconhecida.");
+  return new Response("ok");
 });

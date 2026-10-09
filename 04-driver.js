@@ -70,7 +70,7 @@ PAGES.inicio = {
         <button class="row" data-act="my-score" style="border:none;background:none;gap:8px;flex-wrap:nowrap" aria-label="Minha pontuação"><span class="small muted" style="text-align:right">Minha<br>pontuação</span>${ring(sc.total, true)}</button></div>
       ${banners}${card}
       <div class="tiles">
-        ${T('scanner', 'qr', 'Escanear veículo', 'Ler o QR Code do carro', 'primary')}
+        ${T('scanner', 'qr', 'Escanear veículo', 'Ler o QR Code do carro', 'primary scan')}
         ${T('diario', 'check', 'Checklist diário', daily ? `Feito às ${fmtTime(daily.at)}` : 'Poucos segundos', daily ? 't-green' : '', v && !daily ? '<span class="flag pill warn">pendente</span>' : v ? '<span class="flag pill ok">ok</span>' : '')}
         ${T('abastecer', 'fuel', 'Abastecer', 'Com foto do cupom')}
         ${T('problema', 'alert', 'Informar problema', 'Avaria ou defeito', 't-red')}
@@ -117,7 +117,7 @@ PAGES.scanner = {
     const wrap = CUR.role === 'condutor' ? 'drv' : 'drv" style="margin:0;max-width:560px';
     return `<div class="${wrap}">
       <div><h1>Escanear veículo</h1><p class="muted">Aponte a câmera para o QR Code fixado no veículo.</p></div>
-      <div class="scan-box" id="scan-box"><div class="stack" style="align-items:center;gap:10px;padding:20px;text-align:center;z-index:1" id="scan-idle">${ic('camera')}<button class="btn pri lg" data-act="cam-start">Abrir câmera</button><span class="small" id="cam-msg"></span></div></div>
+      <div class="scan-box" id="scan-box"><div class="stack" style="align-items:center;gap:10px;padding:20px;text-align:center;z-index:1" id="scan-idle">${ic('camera')}<button class="btn ok lg" data-act="cam-start">Abrir câmera</button><span class="small" id="cam-msg"></span></div></div>
       <p class="err" id="scan-err" role="alert"></p>
       <div class="panel"><div class="panel-b stack" style="gap:12px">
         <label class="btn block" style="position:relative;overflow:hidden">${ic('camera')} Ler QR Code por foto<input type="file" accept="image/*" capture="environment" id="qr-file" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
@@ -403,7 +403,7 @@ PAGES.diario = {
   render({ vid }) {
     const d = myDriver(); vid = vid || (d && driverCustodies(d.id)[0]?.vehicleId);
     const v = vid && veh(vid); const c = v && activeCustody(vid);
-    if (!v || !c || (d && c.driverId !== d.id)) return `<div class="drv"><h1>Checklist diário</h1><div class="note">O checklist diário é feito pelo condutor responsável pelo veículo. Escaneie o veículo para começar.</div><button class="btn pri lg block" data-go="scanner">Escanear veículo</button></div>`;
+    if (!v || !c || (d && c.driverId !== d.id)) return `<div class="drv"><h1>Checklist diário</h1><div class="note">O checklist diário é feito pelo condutor responsável pelo veículo. Escaneie o veículo para começar.</div><button class="btn ok lg block" data-go="scanner">Escanear veículo</button></div>`;
     if (!DRAFT || DRAFT.kind !== 'diario') { newDraft('diario', vid, { answer: null, projOk: '1', projectId: currentSegment(c)?.projectId || '', ccId: currentSegment(c)?.ccId || '', type: '', desc: '', severity: '', canRun: '' }); captureLocation(v); }
     const done = dailyDoneToday(vid); const seg = currentSegment(c); const D = DRAFT;
     const sim = D.answer === 'sim', nao = D.answer === 'nao';
@@ -490,7 +490,7 @@ PAGES.problema = {
   driver: true, title: 'Informar problema',
   render({ vid }) {
     const d = myDriver(); vid = vid || (d && driverCustodies(d.id)[0]?.vehicleId);
-    const v = vid && veh(vid); if (!v) return `<div class="drv"><h1>Informar problema</h1><div class="note">Escaneie o veículo para informar um problema.</div><button class="btn pri lg block" data-go="scanner">Escanear veículo</button></div>`;
+    const v = vid && veh(vid); if (!v) return `<div class="drv"><h1>Informar problema</h1><div class="note">Escaneie o veículo para informar um problema.</div><button class="btn ok lg block" data-go="scanner">Escanear veículo</button></div>`;
     if (!DRAFT || DRAFT.kind !== 'problema') { newDraft('problema', vid, { type: '', desc: '', severity: '', canRun: '' }); captureLocation(v); }
     return `<form class="drv" id="pform" novalidate>
       <div><h1>Informar problema</h1><p class="muted">Registre defeitos, avarias ou riscos. A gestão acompanha em tempo real.</p></div>
@@ -597,7 +597,7 @@ PAGES.abastecer = {
   render({ vid }) {
     const d = myDriver(); vid = vid || (d && driverCustodies(d.id)[0]?.vehicleId);
     const v = vid && veh(vid); const c = v && activeCustody(vid);
-    if (!v || !c) return `<div class="drv"><h1>Abastecer</h1><div class="note">O abastecimento é vinculado à posse atual. Escaneie o veículo que está com você.</div><button class="btn pri lg block" data-go="scanner">Escanear veículo</button></div>`;
+    if (!v || !c) return `<div class="drv"><h1>Abastecer</h1><div class="note">O abastecimento é vinculado à posse atual. Escaneie o veículo que está com você.</div><button class="btn ok lg block" data-go="scanner">Escanear veículo</button></div>`;
     if (!DRAFT || DRAFT.kind !== 'abastecer') { newDraft('abastecer', vid, { km: '', liters: '', total: '', fuelType: v.fuelType, station: '' }); captureLocation(v); }
     const seg = currentSegment(c); const stations = [...new Set(S.fuel.map(f => f.station))];
     const types = v.fuelType.startsWith('Diesel') ? ['Diesel S10', 'Diesel S500'] : ['Gasolina', 'Etanol'];
@@ -662,7 +662,7 @@ PAGES.meu_veiculo = {
   driver: true, title: 'Meu veículo',
   render() {
     const d = myDriver(); const c = d && driverCustodies(d.id)[0];
-    if (!c) return `<div class="drv"><h1>Meu veículo</h1><div class="note">Você não está com nenhum veículo.</div><button class="btn pri lg block" data-go="scanner">Escanear veículo</button></div>`;
+    if (!c) return `<div class="drv"><h1>Meu veículo</h1><div class="note">Você não está com nenhum veículo.</div><button class="btn ok lg block" data-go="scanner">Escanear veículo</button></div>`;
     const v = veh(c.vehicleId); const seg = currentSegment(c); const daily = dailyDoneToday(v.id); const mt = vehicleMaint(v.id);
     const fuels = S.fuel.filter(f => f.custodyId === c.id).sort((a, b) => b.at - a.at).slice(0, 3);
     const t = activeTransfer(v.id);

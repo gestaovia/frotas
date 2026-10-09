@@ -127,7 +127,7 @@ function topbar(pg) {
     <h1>${esc(title)}</h1>
     <div class="spacer"></div>
     ${syncBadge()}
-    <button class="icon-btn" data-go="scanner" aria-label="Escanear QR Code" title="Escanear QR Code">${ic('qr')}</button>
+    <button class="icon-btn scan" data-go="scanner" aria-label="Escanear QR Code" title="Escanear QR Code">${ic('qr')}</button>
     <button class="icon-btn" data-act="notifs" aria-label="Notificações" title="Notificações">${ic('bell')}${unread ? `<span class="badge">${unread}</span>` : ''}</button>
     ${themeBtn()}
     <div class="who"><span class="avatar">${initials(CUR.name)}</span><span class="nm">${esc(CUR.name.split(' ')[0])}</span></div>

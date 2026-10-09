@@ -185,7 +185,16 @@ function bonusFor(score) {
   if (cfg.mode === 'faixas') return tierFor(score)?.value || 0;
   return score >= cfg.minScore ? cfg.maxBonus * score / 100 : 0;
 }
-const scoreColor = s => s >= 70 ? 'var(--primary)' : 'var(--text3)';
+/* cor da pontuação: verde (faixa máxima), amarelo, laranja (faixa mínima), vermelho (sem prêmio).
+   Usa as 3 primeiras faixas configuradas; sem elas, 90/80/70. */
+function scoreCuts() {
+  const t = (S.settings.score.tiers || []).map(x => +x.min).filter(n => n > 0).sort((a, b) => b - a);
+  return t.length >= 3 ? t.slice(0, 3) : [90, 80, 70];
+}
+function scoreTone(s) { const [a, b, c] = scoreCuts(); return s >= a ? 'ok' : s >= b ? 'warn' : s >= c ? 'urg' : 'bad'; }
+const SCORE_VAR = { ok: '--u-green', warn: '--u-yellow', urg: '--u-orange', bad: '--u-red' };
+const scoreColor = s => `var(${SCORE_VAR[scoreTone(s)]})`;
+const pctTone = (v, max) => scoreTone(max ? v / max * 100 : 0);
 
 /* ----- locação ----- */
 function rentalState(v) {
